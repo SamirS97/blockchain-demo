@@ -1,82 +1,58 @@
 """
 	blockchain with tokens and coinbase by Vincent LIU and Samir SAYAH - MAIN - Polytech Sorbonne
-		Inspired by: https://anders.com/blockchain/coinbase.html
+	Inspired by: https://anders.com/blockchain/coinbase.html
 
-		Usage: python TokensCoinbase.py
-		Or:    mpirun -n 4 python TokensCoinbase.py
+	Usage: python block3.py
+	Or:    mpirun -n 4 python block3.py
 """
 
 
 
 
 from hash import sha256
-from block import Block, difficulty, pattern
+from block1 import Block, difficulty, pattern
+from block2 import Block_v2
 from blockchain import Blockchain
 from mpi4py import MPI
 import sys
 import numpy
 
-class Block_v2(Block):
-	def __init__(self, block = 0, coinbase = None, tx = None, nonce = 0, previous = None):
-		Block.__init__(self, block, nonce, "", previous)
+class Block_v3(Block_v2):
+
+	def __init__(self, block = 0, nonce = 0, data = "", coinbase = None, tx = []):
+		Block_v2.__init__(self, block, nonce, data)
 		self.coinbase = coinbase
 		self.tx = tx
 
-	def update(self):
-		if self.init:
-			if self.previous:
-				if self.previous == "0" * 64:
-					self.hash = sha256(str(self.block) + str(self.nonce) +  self.data  + self.previous)
-				else:
-					self.hash = sha256(str(self.block) + str(self.nonce) +  self.data  + self.previous.hash)
-			else:
-				self.hash = sha256(str(self.block) + str(self.nonce) +  self.data)
-
-
-			self.valid = (self.hash[0:difficulty] == pattern)
-
+		
 	@property
-	def coinbase(self):
-		return self.__coinbase
+	def hash(self):
 
-	@coinbase.setter
-	def coinbase(self, coinbase):
-		if coinbase:
-			self.__coinbase = coinbase
-			d = coinbase["amount"] + coinbase["recipient"]
-			try:
-				for t in self.tx:
-					d += t["amount"] + t["from"] + t["recipient"]
-			except:
-				pass
-			self.data = d
-			self.update()
-			point = self.next
-			while point:
-				point.update()
-				point = point.next
+		s = self.coinbase["amount"] + self.coinbase["recipient"] if self.coinbase else ""
 
-	@property
-	def tx(self):
-		return self.__tx
+		for t in self.tx:
+			s += t['amount'] + t['from'] + t['recipient']
 
-	@tx.setter
-	def tx(self, tx):
-		self.__tx = tx
-		try:
-			d = self.coinbase["amount"] + self.coinbase["recipient"]
-		except:
-			d = ""
-		if tx:
-			for t in tx:
-				d += t["amount"] + t["from"] + t["recipient"]
-		self.data = d
-		self.update()
-		point = self.next
-		while point:
-			point.update()
-			point = point.next
+		if self.previous:
+			s += self.previous.hash
+		else:
+			s += "0" * 64
 
+		return sha256(str(self.block) + str(self.nonce) +  s )
+  
+	def text_hash(self, i):
+
+		s = self.coinbase["amount"] + self.coinbase["recipient"] if self.coinbase else ""
+
+		for t in self.tx:
+			s += t['amount'] + t['from'] + t['recipient']
+
+		if self.previous:
+			s += self.previous.hash
+		else:
+			s += "0" * 64
+
+		return sha256(str(self.block) + str(i) +  s)
 
 	def show(self):
 		# Your result
@@ -87,9 +63,12 @@ class Block_v2(Block):
 		print("Nonce: {}".format(self.nonce)) 
 		if self.coinbase:
 			print("Coinbase: ${} -> {}".format(self.coinbase["amount"], self.coinbase["recipient"]))
-		if self.tx:
-			for t in self.tx:
-				print("$ {} From: {} -> {}".format(t["amount"], t["from"], t["recipient"]))
+		for t in self.tx:
+			print("$ {} From: {} -> {}".format(t["amount"], t["from"], t["recipient"]))
+		if self.previous:
+			print("Previous: {}".format(self.previous.hash))
+		else:
+			print("Previous: " + "0"*64)
 		print("Hash: {}".format(self.hash))
 		print("Valid: {}\n".format(self.valid))
 
@@ -105,8 +84,8 @@ if __name__ == "__main__":
 	bchain = Blockchain()
 
 	Coinbase = {"amount": "100.00", "recipient": "Anders"}  
-	Tx = None
-	bchain.add( Block_v2(block = "1", coinbase = Coinbase, tx = Tx, nonce = "16651") )
+	Tx = []
+	bchain.add( Block_v3(block = "1", nonce = "16651", coinbase = Coinbase, tx = Tx) )
 
 
 	Coinbase = {"amount": "100.00", "recipient": "Anders"}  
@@ -114,38 +93,40 @@ if __name__ == "__main__":
 		{"amount": "20.00", "from": "Anders", "recipient": "Lucas"},
 		{"amount": "15.00", "from": "Anders", "recipient": "Emily"},
 		{"amount": "15.00", "from": "Anders", "recipient": "Madison"}  ]
-	bchain.add( Block_v2(block = "2", coinbase = Coinbase, tx = Tx, nonce = "215458") )
+	bchain.add( Block_v3(block = "2", nonce = "215458", coinbase = Coinbase, tx = Tx) )
 
 	Coinbase = {"amount": "100.00", "recipient": "Anders"}  
 	Tx = [{"amount": "10.00", "from": "Emily", "recipient": "Jackson"},
 		{"amount": "5.00", "from": "Madison", "recipient": "Jackson"},
 		{"amount": "20.00", "from": "Lucas", "recipient": "Grace"}  ]
-	bchain.add( Block_v2(block = "3", coinbase = Coinbase, tx = Tx, nonce = "146") )
+	bchain.add( Block_v3(block = "3", nonce = "146", coinbase = Coinbase, tx = Tx) )
 
 	Coinbase = {"amount": "100.00", "recipient": "Anders"}  
 	Tx = [{"amount": "15.00", "from": "Jackson", "recipient": "Ryan"},
 		{"amount": "5.00", "from": "Emily", "recipient": "Madison"},
 		{"amount": "8.00", "from": "Sophia", "recipient": "Jackson"}  ]
-	bchain.add( Block_v2(block = "4", coinbase = Coinbase, tx = Tx, nonce = "18292") )
+	bchain.add( Block_v3(block = "4", nonce = "18292", coinbase = Coinbase, tx = Tx) )
 
 	Coinbase = {"amount": "100.00", "recipient": "Sophia"}  
 	Tx = [{"amount": "2.00", "from": "Jackson", "recipient": "Alexander"},
 		{"amount": "6.00", "from": "Ryan", "recipient": "Carter"},
 		{"amount": "4.00", "from": "Ryan", "recipient": "Riley"},
 		{"amount": "9.95", "from": "Grace", "recipient": "Katherine"}  ]
-	bchain.add( Block_v2(block = "5", coinbase = Coinbase, tx = Tx, nonce = "108899") )
+	bchain.add( Block_v3(block = "5", nonce = "108899", coinbase = Coinbase, tx = Tx) )
 
 	if rank == 0:
 		bchain.show()
+		print("We change anders to ander in the first data")
 
 	i = 1
 	Coinbase = {"amount": "100.00", "recipient": "Ander"} 
 	bchain.get_block(i).coinbase = Coinbase
 
-	if rank == 0:
-		bchain.show()
+	#if rank == 0:
+	#	bchain.show()
 		
 	bchain.mine()
 
 	if rank == 0:
+		print("We mine, and get the NEW nonce for every blocks")
 		bchain.show()
